@@ -1,2 +1,4 @@
-# CUSP
-Cubic Spline Implementation in C and C++
+# libsubs
+
+A cubic spline implementation in C and C++
+

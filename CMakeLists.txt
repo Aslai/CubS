@@ -3,6 +3,7 @@ project (libcubs C)
 
 include_directories( "${CMAKE_SOURCE_DIR}/include" )
 
-add_library( libcubs 
-	"${CMAKE_SOURCE_DIR}/src/spline.c" 
+add_library( libcubs
+	"${CMAKE_SOURCE_DIR}/src/spline.c"
+	"${CMAKE_SOURCE_DIR}/include/cubs/spline.h"
 )

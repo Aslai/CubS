@@ -7,6 +7,7 @@
 
 #define OPTIONAL
 #define OUT
+#define IN_OUT
 
 typedef CUBS_DATA_T cubs_number_t;
 typedef struct spline_data* cubs_spline_t;
@@ -15,7 +16,7 @@ typedef unsigned int cubs_index_t;
 typedef struct spline_cache* cubs_cache_t;
 
 cubs_spline_t cubs_create_spline(
-		cubs_index_t dimensions, 
+		cubs_index_t dimensions,
 		cubs_number_t minimum, //Time value of first element
 		cubs_number_t maximum //Time value of last element
 );
@@ -45,19 +46,19 @@ void cubs_destroy_cache(
 
 //Returns index of added point
 cubs_index_t cubs_spline_add(
-	cubs_spline_t spline, 
+	cubs_spline_t spline,
 	cubs_point_t point
 );
 
 //Returns index of added point
 cubs_index_t cubs_spline_insert(
-	cubs_spline_t spline, 
+	cubs_spline_t spline,
 	cubs_index_t index,
 	cubs_point_t point
 );
 
 void cubs_spline_erase(
-	cubs_spline_t spline, 
+	cubs_spline_t spline,
 	cubs_index_t index
 );
 
@@ -71,14 +72,16 @@ cubs_index_t cubs_spline_dimensions(
 );
 
 //Get mutable point
+//Modifying a mutable point after altering the internal layout of the spline
+//(compiling, adding, deleting nodes) will cause bad things to happen...
 cubs_point_t cubs_spline_get(
-	cubs_spline_t spline, 
+	cubs_spline_t spline,
 	cubs_index_t index
 );
 
 //Change point at index. Alternative to mutating point obtained from _get
 void cubs_spline_mutate(
-	cubs_spline_t spline, 
+	cubs_spline_t spline,
 	cubs_index_t index,
 	cubs_point_t point
 );
@@ -108,6 +111,11 @@ void cubs_spline_evaluate_dv2(
 	cubs_spline_t spline,
 	cubs_number_t t,
 	cubs_point_t point OUT
+);
+
+//Reduce a compiled spline to minimum size (cannot be edited)
+void cubs_spline_bake(
+	cubs_spline_t spline
 );
 
 #endif
