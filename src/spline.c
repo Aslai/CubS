@@ -60,6 +60,10 @@ cubs_number_t cubs_matrix_get( cubs_matrix_t matrix, cubs_index_t i, cubs_index_
 }
 
 cubs_number_t cubs_matrix_get_aggressive( cubs_matrix_t matrix, cubs_index_t i, cubs_index_t j ) {
+    i = i + matrix->dist - j;
+    if( i >= matrix->dist * 2 ){
+        return 0;
+    }
     return matrix->inv_mat[i*matrix->length + j];
 }
 
@@ -149,13 +153,18 @@ struct spline_matrix *cubs_create_matrix_aggressive( struct spline_matrix *matri
     struct spline_matrix mat;
     cubs_create_matrix( &mat, size );
     cubs_index_t i, j;
-    matrix->inv_mat = malloc(sizeof(cubs_number_t) * size * size + 2);
+    matrix->inv_mat = malloc(sizeof(cubs_number_t) * size * mat.dist * 2);
     matrix->length = size;
     matrix->divisor = 1;
+    matrix->dist = mat.dist;
 
     for( i = 0; i < size - 2; ++i){
         for( j = 0; j < size - 2; ++j ){
-            matrix->inv_mat[i * size + j] = cubs_matrix_get(&mat, i, j);
+            cubs_index_t newi = i + mat.dist - j;
+            if( newi >= mat.dist * 2 ){
+                continue;
+            }
+            matrix->inv_mat[newi * size + j] = cubs_matrix_get(&mat, i, j);
         }
     }
 
