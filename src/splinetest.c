@@ -28,7 +28,7 @@ int main(){
     cubs_spline_t spline = cubs_create_spline( 2, 0, 10 );
     cubs_cache_t cache = cubs_create_cache(1000000, 1);
     double t = 0;
-    for( t = 0; t <= tau; t += tau / 5000.0 ){
+    for( t = 0; t <= tau; t += tau / 1000000.0 ){
         float point[2] = {cos(t), sin(t)};
         cubs_spline_add(spline, point);
     }

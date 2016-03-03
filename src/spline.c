@@ -31,9 +31,6 @@ struct spline_cache {
 
 cubs_number_t cubs_matrix_get( cubs_matrix_t matrix, cubs_index_t i, cubs_index_t j ) {
     cubs_index_t pos = abs((int)i - (int)j);
-    if( pos > matrix->dist ) {
-        return 0;
-    }
     cubs_number_t value = 0;
     cubs_index_t m = matrix->length - 2;
 
@@ -50,6 +47,9 @@ cubs_number_t cubs_matrix_get( cubs_matrix_t matrix, cubs_index_t i, cubs_index_
     if (effectiveJ < terms) {
         terms = effectiveJ;
     }
+    if( terms > (matrix->dist - pos) / 2 ){
+        terms = (matrix->dist - pos) / 2;
+    }
 
     //Repeatedly add terms from the sequence
     cubs_index_t t;
@@ -60,10 +60,6 @@ cubs_number_t cubs_matrix_get( cubs_matrix_t matrix, cubs_index_t i, cubs_index_
 }
 
 cubs_number_t cubs_matrix_get_aggressive( cubs_matrix_t matrix, cubs_index_t i, cubs_index_t j ) {
-    i = i + matrix->dist - j;
-    i *= i < matrix->dist * 2;
-    //i = j = 0;
-    //return 0;
     return matrix->inv_mat[i*matrix->length + j];
 }
 
@@ -158,13 +154,13 @@ struct spline_matrix *cubs_create_matrix_aggressive( struct spline_matrix *matri
     matrix->divisor = 1;
     matrix->dist = mat.dist;
 
-    for( i = 0; i < size - 2; ++i){
+    for( i = 0; i < mat.dist * 2; ++i){
         for( j = 0; j < size - 2; ++j ){
-            cubs_index_t newi = i + mat.dist - j;
-            if( newi >= mat.dist * 2 ){
+            cubs_index_t newi = i - mat.dist + j;
+            if( newi >= size - 2 ){
                 continue;
             }
-            matrix->inv_mat[newi * size + j] = cubs_matrix_get(&mat, i, j);
+            matrix->inv_mat[i * size + j] = cubs_matrix_get(&mat, newi, j);
         }
     }
 
@@ -364,10 +360,14 @@ void cubs_spline_compile( cubs_spline_t spline, cubs_cache_t cache OPTIONAL ) {
     if( cache && cache->aggressive ){
         for ( i = 0; i < m; ++i) {
             cubs_number_t *value = C2 + (i+1) * spline->dimensions;
-            for ( j = 0; j < m; ++j) {
-                cubs_number_t mat = cubs_matrix_get_aggressive( matrix, i, j );
+            for ( j = 0; j < matrix->dist * 2; ++j) {
+                cubs_index_t newj = j - matrix->dist + i;
+                if( newj >= m ){
+                    continue;
+                }
+                cubs_number_t mat = cubs_matrix_get_aggressive( matrix, j, i );
                 for (k = 0; k < spline->dimensions; ++k) {
-                    value[k] += mat * C[j * spline->dimensions + k];
+                    value[k] += mat * C[newj * spline->dimensions + k];
                 }
             }
         }
