@@ -25,9 +25,43 @@ typedef struct spline_matrix {
 
 struct spline_cache {
     struct spline_matrix *matrices; //sorted on length
-    cubs_index_t length, references, max_size;
+    cubs_index_t length, references, max_size, aggressive;
 };
 
+
+cubs_number_t cubs_matrix_get( cubs_matrix_t matrix, cubs_index_t i, cubs_index_t j ) {
+    cubs_index_t pos = abs((int)i - (int)j);
+    if( pos > matrix->dist ) {
+        return 0;
+    }
+    cubs_number_t value = 0;
+    cubs_index_t m = matrix->length - 2;
+
+    cubs_index_t effectiveSize = m / 2 + m % 2;
+    cubs_index_t effectiveI = i;
+    cubs_index_t effectiveJ = j;
+    if (i >= effectiveSize) {
+        effectiveI = m - 1 - i;
+    }
+    if (j >= effectiveSize) {
+        effectiveJ = m - 1 - j;
+    }
+    cubs_index_t terms = effectiveI;
+    if (effectiveJ < terms) {
+        terms = effectiveJ;
+    }
+
+    //Repeatedly add terms from the sequence
+    cubs_index_t t;
+    for (t = 0; t <= terms; ++t) {
+        value += matrix->inv_mat[matrix->length - 2 - (pos + 2 * t)];
+    }
+    return value * ((i + j) % 2 ? -1.0 : 1.0);
+}
+
+cubs_number_t cubs_matrix_get_aggressive( cubs_matrix_t matrix, cubs_index_t i, cubs_index_t j ) {
+    return matrix->inv_mat[i*matrix->length + j];
+}
 
 static cubs_index_t cubs_spline_mem_calc( cubs_index_t count, cubs_index_t dimensions ) {
     return count * dimensions * sizeof( cubs_number_t );
@@ -110,12 +144,32 @@ void cubs_destroy_matrix( struct spline_matrix *matrix ) {
     }
 }
 
-cubs_cache_t cubs_create_cache( cubs_index_t max_size ) {
+//Does not do any allocation, expects preallocated pointers
+struct spline_matrix *cubs_create_matrix_aggressive( struct spline_matrix *matrix, cubs_index_t size ) {
+    struct spline_matrix mat;
+    cubs_create_matrix( &mat, size );
+    cubs_index_t i, j;
+    matrix->inv_mat = malloc(sizeof(cubs_number_t) * size * size + 2);
+    matrix->length = size;
+    matrix->divisor = 1;
+
+    for( i = 0; i < size - 2; ++i){
+        for( j = 0; j < size - 2; ++j ){
+            matrix->inv_mat[i * size + j] = cubs_matrix_get(&mat, i, j);
+        }
+    }
+
+    cubs_destroy_matrix( &mat );
+    return matrix;
+}
+
+cubs_cache_t cubs_create_cache( cubs_index_t max_size, cubs_index_t aggressive ) {
     cubs_cache_t cache = malloc(sizeof(struct spline_cache));
     cache->matrices = NULL;
     cache->length = 0;
     cache->max_size = max_size;
     cache->references = 1;
+    cache->aggressive = aggressive;
 }
 
 cubs_cache_t cubs_reference_cache( cubs_cache_t other ) {
@@ -144,35 +198,6 @@ void cubs_destroy_cache( cubs_cache_t other ) {
     }
 }
 
-cubs_number_t cubs_matrix_get( cubs_matrix_t matrix, cubs_index_t i, cubs_index_t j ) {
-    cubs_index_t pos = abs((int)i - (int)j);
-    if( pos > matrix->dist ) {
-        return 0;
-    }
-    cubs_number_t value = 0;
-    cubs_index_t m = matrix->length - 2;
-
-    cubs_index_t effectiveSize = m / 2 + m % 2;
-    cubs_index_t effectiveI = i;
-    cubs_index_t effectiveJ = j;
-    if (i >= effectiveSize) {
-        effectiveI = m - 1 - i;
-    }
-    if (j >= effectiveSize) {
-        effectiveJ = m - 1 - j;
-    }
-    cubs_index_t terms = effectiveI;
-    if (effectiveJ < terms) {
-        terms = effectiveJ;
-    }
-
-    //Repeatedly add terms from the sequence
-    cubs_index_t t;
-    for (t = 0; t <= terms; ++t) {
-        value += matrix->inv_mat[matrix->length - 2 - (pos + 2 * t)];
-    }
-    return value * ((i + j) % 2 ? -1.0 : 1.0);
-}
 
 struct spline_matrix *cubs_cache_add( cubs_cache_t cache, cubs_index_t length ) {
     cubs_index_t idx = 0;
@@ -200,18 +225,31 @@ struct spline_matrix *cubs_cache_add( cubs_cache_t cache, cubs_index_t length ) 
             }
             mid = low + (high - low) / 2;
         }
+        if( length == cache->matrices[low].length ){
+            return &cache->matrices[low];
+        }
         idx = mid;
     }
     if( cache->matrices == NULL ) {
         cache->matrices = malloc( sizeof( struct spline_matrix ) );
         cache->length = 1;
-        return cubs_create_matrix( cache->matrices, length );
+        if( cache->aggressive ){
+            return cubs_create_matrix_aggressive( cache->matrices, length );
+        }
+        else {
+            return cubs_create_matrix( cache->matrices, length );
+        }
     }
     //We need to realloc and generate the new matrix at location idx
     cache->matrices = realloc( cache->matrices, (cache->length + 1) * sizeof( struct spline_matrix ) );
     memmove( cache->matrices + idx + 1, cache->matrices + idx, cache->length - idx );
     cache->length ++;
-    return cubs_create_matrix( cache->matrices + idx, length );
+    if( cache->aggressive ){
+        return cubs_create_matrix_aggressive( cache->matrices + idx, length );
+    }
+    else {
+        return cubs_create_matrix( cache->matrices + idx, length );
+    }
 }
 
 //Returns index of added point
@@ -313,12 +351,25 @@ void cubs_spline_compile( cubs_spline_t spline, cubs_cache_t cache OPTIONAL ) {
     for( i = 0; i < spline->dimensions * n; ++i ) {
         C2[i] = 0;
     }
-    for ( i = 0; i < m; ++i) {
-        cubs_number_t *value = C2 + (i+1) * spline->dimensions;
-        for ( j = 0; j < m; ++j) {
-            cubs_number_t mat = cubs_matrix_get( matrix, i, j );
-            for (k = 0; k < spline->dimensions; ++k) {
-                value[k] += mat * C[j * spline->dimensions + k];
+    if( cache && cache->aggressive ){
+        for ( i = 0; i < m; ++i) {
+            cubs_number_t *value = C2 + (i+1) * spline->dimensions;
+            for ( j = 0; j < m; ++j) {
+                cubs_number_t mat = cubs_matrix_get_aggressive( matrix, i, j );
+                for (k = 0; k < spline->dimensions; ++k) {
+                    value[k] += mat * C[j * spline->dimensions + k];
+                }
+            }
+        }
+    }
+    else{
+        for ( i = 0; i < m; ++i) {
+            cubs_number_t *value = C2 + (i+1) * spline->dimensions;
+            for ( j = 0; j < m; ++j) {
+                cubs_number_t mat = cubs_matrix_get( matrix, i, j );
+                for (k = 0; k < spline->dimensions; ++k) {
+                    value[k] += mat * C[j * spline->dimensions + k];
+                }
             }
         }
     }

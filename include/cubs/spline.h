@@ -22,7 +22,7 @@ cubs_spline_t cubs_reference_spline( cubs_spline_t other );
 //Reduce reference count, and destroy if references reaches zero.
 void cubs_destroy_spline( cubs_spline_t other );
 
-cubs_cache_t cubs_create_cache( cubs_index_t max_size );
+cubs_cache_t cubs_create_cache( cubs_index_t max_size, cubs_index_t aggressive );
 
 cubs_cache_t cubs_reference_cache( cubs_cache_t other );
 
