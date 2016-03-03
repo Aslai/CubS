@@ -61,9 +61,9 @@ cubs_number_t cubs_matrix_get( cubs_matrix_t matrix, cubs_index_t i, cubs_index_
 
 cubs_number_t cubs_matrix_get_aggressive( cubs_matrix_t matrix, cubs_index_t i, cubs_index_t j ) {
     i = i + matrix->dist - j;
-    if( i >= matrix->dist * 2 ){
-        return 0;
-    }
+    i *= i < matrix->dist * 2;
+    //i = j = 0;
+    //return 0;
     return matrix->inv_mat[i*matrix->length + j];
 }
 
@@ -179,6 +179,7 @@ cubs_cache_t cubs_create_cache( cubs_index_t max_size, cubs_index_t aggressive )
     cache->max_size = max_size;
     cache->references = 1;
     cache->aggressive = aggressive;
+    return cache;
 }
 
 cubs_cache_t cubs_reference_cache( cubs_cache_t other ) {
